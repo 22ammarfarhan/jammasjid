@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Display Masjid Bintang Sunnah - Samarinda</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --card-bg: #1a1a1a;
+            --accent: #00ff88;
+            --iqomah-color: #ff3333;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: white;
+            font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+            margin: 0; padding: 0; overflow: hidden;
+            height: 100vh; display: flex; flex-direction: column;
+        }
+
+        .main-wrapper { display: flex; flex: 1; height: 84vh; }
+
+        .left-panel {
+            flex: 1.3;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            padding: 20px;
+            border-right: 2px solid #333;
+        }
+
+        .right-panel {
+            flex: 0.7;
+            background: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 15px;
+        }
+
+        .poster-frame {
+            width: 100%; height: 100%;
+            border-radius: 15px;
+            object-fit: cover;
+            border: 2px solid #444;
+        }
+
+        .nama-masjid { font-size: 2.5rem; text-align: center; margin: 0; font-weight: 800; color: #fff; }
+        .lokasi { text-align: center; font-size: 1.2rem; color: #aaa; margin-bottom: 5px; }
+        
+        #jam-utama { 
+            font-size: 10rem; 
+            font-weight: bold; 
+            color: var(--accent); 
+            text-align: center; 
+            line-height: 1; 
+            margin: 5px 0;
+        }
+
+        .running-info-tarawih {
+            background: rgba(0, 255, 136, 0.1);
+            border: 2px solid var(--accent);
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+            margin-bottom: 10px;
+            animation: pulse 3s infinite;
+        }
+        .label-tarawih { color: var(--accent); font-weight: bold; font-size: 1.1rem; text-transform: uppercase; }
+        .nama-petugas { font-size: 2.2rem; font-weight: bold; color: white; display: block; margin-top: 5px; }
+
+        @keyframes pulse {
+            0% { border-color: var(--accent); }
+            50% { border-color: #ffffff; }
+            100% { border-color: var(--accent); }
+        }
+
+        #tgl-hijri { text-align: center; font-size: 1.5rem; color: var(--accent); margin-bottom: 15px; }
+        
+        .grid-sholat { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .box-sholat {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            border-bottom: 5px solid var(--accent);
+        }
+        .sholat-name { font-size: 1.2rem; opacity: 0.8; color: var(--accent); font-weight: bold; }
+        .sholat-time { font-size: 2.5rem; font-weight: bold; }
+
+        .footer { background: #600000; padding: 10px 0; height: 6vh; display: flex; align-items: center; }
+        marquee { font-size: 1.8rem; }
+
+        #overlay {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: black; display: none; z-index: 1000;
+            justify-content: center; align-items: center; 
+            flex-direction: column; text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<div id="overlay">
+    <div style="font-size: 6rem; font-weight: bold;">LURUSKAN SHAF</div>
+    <div style="font-size: 2.5rem; color: #ff3333; margin-top: 30px;">MATIKAN HANDPHONE</div>
+</div>
+
+<div class="main-wrapper">
+    <div class="left-panel">
+        <div>
+            <h1 class="nama-masjid">MASJID BINTANG SUNNAH</h1>
+            <div class="lokasi">KOTA SAMARINDA</div>
+            
+            <div id="jam-utama">00:00:00</div>
+
+            <div id="display-tarawih" class="running-info-tarawih" style="display:none;">
+                <div class="label-tarawih">IMAM TARAWIH MALAM INI</div>
+                <span id="imam-tarawih" class="nama-petugas">Memuat nama...</span>
+            </div>
+
+            <div id="tgl-hijri">Menghubungkan API...</div>
+        </div>
+        <div class="grid-sholat" id="jadwal-list"></div>
+    </div>
+    <div class="right-panel">
+        <img src="https://i.ibb.co.com/LDfXDtTN/Screenshot-20260226-090251-Gallery.jpg" class="poster-frame">
+    </div>
+</div>
+
+<div class="footer">
+    <marquee scrollamount="7">Selamat Datang di Masjid Bintang Sunnah • Kota Samarinda • Siapkan infaq terbaik Anda</marquee>
+</div>
+
+<script>
+    const URL_JADWAL_TARAWIH = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSAJfrWBCTDGGBxz-GiP7i5QmHduzhVNpwk4DgEXIJpx8Si9vvAd8p2U0JrulsKCli1HwuGwBriqANK/pub?output=csv";
+    const KODE_KOTA = '2310'; 
+    let jadwalSholat = null;
+    let isIqomah = false;
+    let iqomahTimer = 600; 
+
+    function updateClock() {
+        const now = new Date();
+        const h = String(now.getHours()).padStart(2, '0');
+        const m = String(now.getMinutes()).padStart(2, '0');
+        const s = String(now.getSeconds()).padStart(2, '0');
+        
+        if (!isIqomah) {
+            document.getElementById('jam-utama').innerText = `${h}:${m}:${s}`;
+            if (jadwalSholat && s === "00") { 
+                checkAdzanTime(`${h}:${m}`);
+            }
+        } else {
+            runIqomahCountdown();
+        }
+    }
+
+    function checkAdzanTime(waktuSekarang) {
+        const daftar = ['subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'];
+        daftar.forEach(sholat => {
+            if (jadwalSholat && jadwalSholat[sholat] === waktuSekarang) {
+                isIqomah = true;
+                document.getElementById('jam-utama').style.color = 'var(--iqomah-color)';
+            }
+        });
+    }
+
+    function runIqomahCountdown() {
+        if (iqomahTimer > 0) {
+            iqomahTimer--;
+            let min = Math.floor(iqomahTimer / 60);
+            let sec = iqomahTimer % 60;
+            document.getElementById('jam-utama').innerText = 
+                `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+        } else {
+            document.getElementById('overlay').style.display = 'flex';
+            setTimeout(() => { location.reload(); }, 900000); 
+        }
+    }
+
+    async function ambilDataSholat() {
+        try {
+            const t = new Date();
+            const url = `https://api.myquran.com/v1/sholat/jadwal/${KODE_KOTA}/${t.getFullYear()}/${t.getMonth()+1}/${t.getDate()}`;
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if(data.status) {
+                jadwalSholat = data.data.jadwal;
+                document.getElementById('tgl-hijri').innerText = jadwalSholat.tanggal;
+                
+                const listTampil = ['subuh', 'terbit', 'dzuhur', 'ashar', 'maghrib', 'isya'];
+                let html = '';
+                listTampil.forEach(s => {
+                    html += `<div class="box-sholat">
+                                <div class="sholat-name">${s.toUpperCase()}</div>
+                                <div class="sholat-time">${jadwalSholat[s]}</div>
+                             </div>`;
+                });
+                document.getElementById('jadwal-list').innerHTML = html;
+            }
+        } catch (err) {
+            document.getElementById('tgl-hijri').innerText = "Koneksi Bermasalah...";
+        }
+    }
+
+    async function muatJadwalTarawih() {
+        try {
+            const res = await fetch(URL_JADWAL_TARAWIH);
+            const csvText = await res.text();
+            
+            const now = new Date();
+            const today = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+            
+            const rows = csvText.split('\n');
+            for (let i = 1; i < rows.length; i++) {
+                const cols = rows[i].split(',');
+                if (cols[0] && cols[0].trim() === today) {
+                    document.getElementById('display-tarawih').style.display = 'block';
+                    document.getElementById('imam-tarawih').innerText = cols[1].trim();
+                    break;
+                }
+            }
+        } catch (err) {
+            console.log("Error Tarawih:", err);
+        }
+    }
+
+    // Jalankan fungsi utama
+    setInterval(updateClock, 1000);
+    updateClock();
+    ambilDataSholat();
+    muatJadwalTarawih();
+</script>
+
+</body>
+</html>
